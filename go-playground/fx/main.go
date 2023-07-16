@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -17,8 +18,20 @@ func main() {
 		// }),
 		fx.Provide(
 			NewHTTPServer,
-			NewServeMux,
-			NewEchoHandler,
+			fx.Annotate(
+				NewServeMux,
+				fx.ParamTags(`name:"echo"`, `name:"hello"`),
+			),
+			fx.Annotate(
+				NewEchoHandler,
+				fx.As(new(Route)),
+				fx.ResultTags(`name:"echo"`),
+			),
+			fx.Annotate(
+				NewHelloHandler,
+				fx.As(new(Route)),
+				fx.ResultTags(`name:"hello"`),
+			),
 			zap.NewDevelopment,
 		),
 		fx.Invoke(func(*http.Server) {}),
@@ -58,8 +71,48 @@ func (h *EchoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func NewServeMux(echo *EchoHandler) *http.ServeMux {
+func NewServeMux(route1, route2 Route) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("/echo", echo)
+	mux.Handle(route1.Pattern(), route1)
+	mux.Handle(route2.Pattern(), route2)
 	return mux
+}
+
+type Route interface {
+	http.Handler
+
+	// Pattern reports the path at which this is registered.
+	Pattern() string
+}
+
+func (*EchoHandler) Pattern() string {
+	return "/echo"
+}
+
+type HelloHandler struct {
+	log *zap.Logger
+}
+
+// NewHelloHandler builds a new HelloHandler.
+func NewHelloHandler(log *zap.Logger) *HelloHandler {
+	return &HelloHandler{log: log}
+}
+
+func (*HelloHandler) Pattern() string {
+	return "/hello"
+}
+
+func (h *HelloHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.log.Error("Failed to read request", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := fmt.Fprintf(w, "Hello, %s\n", body); err != nil {
+		h.log.Error("Failed to write response", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
