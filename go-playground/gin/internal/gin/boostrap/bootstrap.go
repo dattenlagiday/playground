@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"apps/gin/internal/gin/controllers/v1"
+	"apps/gin/internal/gin/middlewares"
 	"apps/gin/internal/gin/routes"
 	"apps/gin/internal/gin/services"
 	"apps/gin/internal/gin/utils"
-	"apps/gin/internal/middlewares"
 
 	"go.uber.org/fx"
 )
